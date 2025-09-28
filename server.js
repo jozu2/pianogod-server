@@ -1,4 +1,4 @@
-// filepath: server.js
+// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -7,47 +7,63 @@ const cors = require("cors");
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.IO with CORS
+// Setup Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins (or replace "*" with your frontend URL if you want stricter security)
+    origin: [
+      "http://localhost:3000", // local React dev
+      "http://localhost", // raw localhost
+      "https://john.pianogod.com", // ✅ your live frontend
+      "https://josh-pianogod.onrender.com", // Render backend domain (for testing)
+    ],
     methods: ["GET", "POST"],
   },
 });
 
-// Use CORS middleware
+// Use CORS middleware globally
 app.use(cors());
 
-// Basic test route
+// Test route (optional)
 app.get("/", (req, res) => {
-  res.send("Server is running ✅");
+  res.send("✅ Pianogod socket server is running!");
 });
 
 // Handle WebSocket connections
 io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
+  console.log("🔌 A user connected:", socket.id);
 
-  // Join a specific room
+  // By default, assign to a "lobby" room until they send joinRoom
+  socket.join("lobby");
+
+  // Handle joining a room
   socket.on("joinRoom", (room) => {
+    // Leave lobby if they were in it
+    socket.leave("lobby");
+
+    // Join requested room
     socket.join(room);
-    console.log(`User ${socket.id} joined room: ${room}`);
+    console.log(`👥 User ${socket.id} joined room: ${room}`);
+
+    // Let others in the room know someone joined
+    socket.to(room).emit("userJoined", { userId: socket.id, room });
   });
 
-  // Broadcast changes to other users in the room
+  // Handle data sync inside a room
   socket.on("syncData", (data) => {
     const { room, payload, senderId } = data;
-    console.log(`Broadcasting data to room ${room}:`, payload);
+    console.log(`📡 Broadcasting to room ${room}:`, payload);
+
     socket.to(room).emit("updateData", { payload, senderId });
   });
 
   // Handle disconnection
   socket.on("disconnect", () => {
-    console.log("A user disconnected:", socket.id);
+    console.log("❌ A user disconnected:", socket.id);
   });
 });
 
-// Start the server
-const PORT = process.env.PORT || 3000; // ✅ Works on Render or locally
+// Use Render’s PORT or fallback to 3000 locally
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
